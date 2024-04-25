@@ -4,18 +4,29 @@ import json
 import os
 import numpy as np
 
+# Get the total distance of the given tour
 def tour_distance(tour, dist_matrix):
     tour_shifted = np.roll(tour, -1)
     return np.sum(dist_matrix[tour, tour_shifted])
 
+
+# for final iter
+def tour_distance_final_iter(tour, dist_matrix):
+    tour_shifted = np.roll(tour, -1)
+    return dist_matrix[tour, tour_shifted].tolist(), np.sum(dist_matrix[tour, tour_shifted])
+
+
+# A neighbourhood function which mirror rotates a subset of the given tour and return it
 def two_opt(tour, i, j):
     new_tour = np.concatenate((tour[:i], tour[i:j+1][::-1], tour[j+1:]))
     return new_tour
 
+# A neighbourhood function which swaps two segments in a given tour. E
 def three_opt(tour, i, j, k):
     new_tour = np.concatenate((tour[:i], tour[j:k], tour[i:j], tour[k:]))
     return new_tour
 
+# A neighbourhood function which swaps two cities' position in a given tour. E
 def four_opt(tour, k=150):
     new_tour = tour.copy()
     for _ in range(k):
@@ -23,6 +34,7 @@ def four_opt(tour, k=150):
         new_tour = two_opt(new_tour, i, j)
     return new_tour
 
+# Generating a new tour based on given neighbourhood function
 def local_search(tour, dist_matrix, operator, k):
     better_solution_found = True
     original_distance = tour_distance(tour, dist_matrix)
@@ -40,8 +52,8 @@ def local_search(tour, dist_matrix, operator, k):
                         original_distance = new_distance
                         better_solution_found = True
         if k ==1:
-            for i in range(1, len(tour) - 1):
-                for j in range(i+1, len(tour)):
+            for i in range(1, len(tour) - 2):
+                for j in range(i+1, len(tour)-1):
                     if j-i == 1: continue
                     for l in  range(j+1,len(tour)):
                         if l-j == 1: continue
@@ -63,56 +75,26 @@ def local_search(tour, dist_matrix, operator, k):
 
 
 
-# def vns(tour, dist_matrix, k_max=500, operator=two_opt):
-#     k = 1
-#     total_exploration_time = 0
-#     total_exploitation_time = 0
-#     while k <= k_max:
-#         time_start = time.time()
-#         k_tour = shaking(tour, k)
-#         time_end = time.time()
-#         total_exploration_time += time_end - time_start
-#         time_start = time.time()
-#         new_tour = local_search(k_tour, dist_matrix, operator)
-#         time_end = time.time()
-#         total_exploitation_time += time_end - time_start
-#         if tour_distance(new_tour, dist_matrix) < tour_distance(tour, dist_matrix):
-#             tour = new_tour
-#             k = 1
-#         else:
-#             k += 1
-#     return tour, total_exploration_time, total_exploitation_time
-
-
-
-
-
+# Our Custom VNS which runs till the newly calculated tour is no different than the original one with very neighbourhood function. If a new one is found, it starts again with the new one.
 def customVns(tour, dist_matrix,operators, k_max=2):
     k = 0
-    total_exploration_time = 0
-    total_exploitation_time = 0
+    # total_exploration_time = 0
+    # total_exploitation_time = 0
     while k <= k_max:
-        # time_start = time.time()
-        # k_tour = shaking(tour, k)
-        # time_end = time.time()
-        # total_exploration_time += time_end - time_start
-        time_start = time.time()
         new_tour = local_search(tour, dist_matrix, operators[k],k)
-        time_end = time.time()
-        total_exploitation_time += time_end - time_start
         if tour_distance(new_tour, dist_matrix) < tour_distance(tour, dist_matrix):
             tour = new_tour
             k = 1
         else:
             k += 1
-    return tour, total_exploration_time, total_exploitation_time
+    return tour
 
 
 
-with open("benchmark_dataset/optimal_solutions.json", "r") as json_file:
+with open("VNS_TSP/benchmark_dataset/optimal_solutions.json", "r") as json_file:
     optimal_solutions = json.load(json_file)
 
-benchmark_dir = "benchmark_dataset"
+benchmark_dir = "VNS_TSP/benchmark_dataset"
 
 txt_files = [f for f in os.listdir(benchmark_dir) if f.endswith('.txt')]
 
@@ -128,10 +110,8 @@ for txt_file in txt_files:
         dist_matrix = np.array([list(map(float, line.split())) for line in lines])
 
     initial_tour = random.sample(range(len(dist_matrix)), len(dist_matrix))
-    time_start = time.time()
     neighbourhood_structres  = [two_opt, three_opt, four_opt]
-    best_tour, exploration_time, exploitation_time = customVns(initial_tour, dist_matrix, neighbourhood_structres,2)
-    time_end = time.time()
+    best_tour = customVns(initial_tour, dist_matrix, neighbourhood_structres,2)
     
     results.append({
         "Test": matrix_number,
@@ -139,9 +119,8 @@ for txt_file in txt_files:
         "Total distance by VNS": tour_distance(best_tour, dist_matrix),
         "Optimal distance": optimal_solutions[matrix_number]["optimal_solution"],
         "Score": (optimal_solutions[matrix_number]["optimal_solution"] / tour_distance(best_tour, dist_matrix)) * 100,
-        "Time of execution": time_end - time_start,
-        "Exploration time": exploration_time,
-        "Exploitation time": exploitation_time
+        "Best Tour" : best_tour.tolist(),
+        "Corresponding Distances": tour_distance_final_iter(best_tour, dist_matrix)
     })
     counter += 1
 
@@ -152,5 +131,5 @@ logs = {
     "Results": results
 }
 
-with open("logs/results.json", "w") as json_file:
+with open("VNS_TSP/logs/results_vns.json", "w") as json_file:
     json.dump(logs, json_file, indent=4)
